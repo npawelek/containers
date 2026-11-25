@@ -1,0 +1,91 @@
+---
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+name: Renovate
+
+on:
+  workflow_dispatch:
+    inputs:
+      dryRun:
+        description: "Dry-Run"
+        default: "false"
+        required: false
+      logLevel:
+        description: "Log-Level"
+        default: "debug"
+        required: false
+  schedule:
+    - cron: "0 */3 * * *"
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/renovate.yaml
+      - .renovaterc.json5
+  pull_request:
+    types: [edited]
+  issues:
+    types: [edited]
+
+permissions:
+  contents: read
+
+env:
+  LOG_LEVEL: debug
+  RENOVATE_DRY_RUN: false
+  RENOVATE_CONFIG_FILE: .renovaterc.json5
+  RENOVATE_REPOSITORIES: ${{ github.repository }}
+
+jobs:
+  renovate:
+    name: Renovate
+    runs-on: ubuntu-26.04
+    permissions: {}
+    if: >-
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'push' ||
+      (github.event.sender.type != 'Bot' && (
+        (github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          startsWith(github.event.pull_request.head.ref, 'renovate/') &&
+          contains(github.event.pull_request.body, '- [x] <!-- rebase-check -->')) ||
+        (github.event_name == 'issues' &&
+          github.event.issue.title == 'Renovate Dashboard 🤖' &&
+          contains(github.event.issue.body, '- [x] <!--'))))
+    concurrency:
+      group: renovate
+      cancel-in-progress: false
+    steps:
+      - name: Generate Token
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        id: app-token
+        with:
+          client-id: "${{ secrets.BOT_CLIENT_ID }}"
+          private-key: "${{ secrets.BOT_APP_PRIVATE_KEY }}"
+          permission-checks: read
+          permission-contents: write
+          permission-issues: write
+          permission-pull-requests: write
+          permission-statuses: write
+          permission-workflows: write
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: "${{ github.event.repository.default_branch }}"
+          persist-credentials: false
+
+      - name: Override default config from dispatch variables
+        shell: bash
+        env:
+          INPUT_DRY_RUN: ${{ inputs.dryRun }}
+          INPUT_LOG_LEVEL: ${{ inputs.logLevel }}
+        run: |
+          echo "RENOVATE_DRY_RUN=${INPUT_DRY_RUN:-${RENOVATE_DRY_RUN}}" >> "${GITHUB_ENV}"
+          echo "LOG_LEVEL=${INPUT_LOG_LEVEL:-${LOG_LEVEL}}" >> "${GITHUB_ENV}"
+
+      - name: Renovate
+        uses: renovatebot/github-action@acdd6bda8b035c99ce59d5675816af2aa65a1774 # v46.3.14
+        with:
+          configurationFile: "${{ env.RENOVATE_CONFIG_FILE }}"
+          token: "${{ steps.app-token.outputs.token }}"
