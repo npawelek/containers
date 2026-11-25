@@ -10,3 +10,6 @@ rules:
       # from the triggering run: it only re-runs the failed jobs of a
       # push-triggered (trusted) Release run via the API. Standard secure pattern.
       - retry-release.yaml
+      # Release Failure uses workflow_run but checks out nothing: it only opens
+      # or comments on an issue about a failed push-triggered Release run.
+      - release-failure.yaml
