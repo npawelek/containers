@@ -6,7 +6,7 @@ variable "APP" {
 
 variable "VERSION" {
   // renovate: datasource=npm depName=@inkeep/open-knowledge
-  default = "0.89.16"
+  default = "0.89.17"
 }
 
 variable "SOURCE" {
